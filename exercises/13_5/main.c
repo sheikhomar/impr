@@ -1,8 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
+
 #define MAX_NAME_LGT 50
-#define MAX_PEOPLE 11
+#define MAX_PEOPLE 15
+#define MAX_CHARS_PER_LINE 100
 
 struct person{
   char fornavn[MAX_NAME_LGT];
@@ -15,22 +18,30 @@ struct person{
 
 typedef struct person Person;
 
-void read_people_from_file(Person *people, const int people_size, const char *fileName) {
-  int i;
+void read_people_from_file(Person *people, int *people_size, const char *fileName) {
+  int i = 0, scanres;
+  char line[MAX_CHARS_PER_LINE];
   FILE *handle = fopen(fileName, "r");
 
-  if (handle != NULL) {        /* File could be opened */
-    for (i = 0; i < people_size; i++) {
-      fscanf(handle, " %[^ ]", people[i].fornavn);
-      fscanf(handle, " %[^,]", people[i].efternavn);
-      fscanf(handle, ", %[^0987654321]", people[i].vejnavn);
-      fscanf(handle, " %d", &people[i].vejnummer);
-      fscanf(handle, ", %d", &people[i].postnummer);
-      fscanf(handle, " %[^.]. ", people[i].bynavn);
+  if (handle != NULL) {
+    while (fgets(line, MAX_CHARS_PER_LINE, handle) != NULL) {
+      scanres = sscanf(line, " %[^ ] %[^,], %[^0987654321] %d, %d %[^.].",
+          people[i].fornavn,
+          people[i].efternavn,
+          people[i].vejnavn,
+          &people[i].vejnummer,
+          &people[i].postnummer,
+          people[i].bynavn);
+
+      assert(scanres == 6);
+
+      i++;
     }
+    *people_size = i;
+
+    fclose(handle);
   }
 
-  fclose(handle);
 }
 
 void print_people(const Person *people, const int people_size) {
@@ -48,7 +59,6 @@ void print_people(const Person *people, const int people_size) {
 int compare_people(const void *a, const void *b) {
   Person *person1 = (Person *)a;
   Person *person2 = (Person *)b;
-
 
   return strcmp(person1->efternavn, person2->efternavn);
 }
@@ -70,16 +80,17 @@ void write_people_to_file(const Person *people, const int people_size, const cha
 
 int main(void) {
   Person people[MAX_PEOPLE];
+  int people_size;
 
-  read_people_from_file(people, MAX_PEOPLE, "people.txt");
+  read_people_from_file(people, &people_size, "people.txt");
   printf("People read from file:\n");
-  print_people(people, MAX_PEOPLE);
+  print_people(people, people_size);
 
-  sort_people(people, MAX_PEOPLE);
+  sort_people(people, people_size);
   printf("Sorted list of people:\n");
-  print_people(people, MAX_PEOPLE);
+  print_people(people, people_size);
 
-  write_people_to_file(people, MAX_PEOPLE, "people-output.tmp");
+  write_people_to_file(people, people_size, "people-output.tmp");
 
   return 0;
 }
