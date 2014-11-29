@@ -21,23 +21,33 @@ struct match {
   int home_goals;
   int away_goals;
   int spectator_count;
+  int total_goals;
 };
 
 typedef struct match Match;
 
 struct round {
-  unsigned char number;
+  int number;
   Match matches[MAX_MATCHES_PER_ROUND];
+  int total_goals;
 };
 
 typedef struct round Round;
 
-int is_new_line(char *string) {
-  return strcmp(string, "\r\n") == 0;
+struct team {
+  char name[4];
+  int home_wins;
+  int away_wins;
+};
+
+typedef struct team Team;
+
+int is_empty(char *line) {
+  return strcmp(line, "\r\n") == 0;
 }
 
 void print_match(const Match *match) {
-  printf("%s %02d/%02d %02d:%02d  %3s vs. %3s [%d:%d] (%6d)\n",
+  printf(" %s %02d/%02d %02d:%02d  %3s vs. %3s [%d:%d] (%6d)\n",
       match->weekday,
       match->day,
       match->month,
@@ -86,7 +96,7 @@ void load_match_results(Round *rounds, int *round_count, const char *file_name) 
   handle = fopen(file_name, "r");
   if (handle != NULL) {
     while (fgets(line, MAX_CHARS_PER_LINE, handle) != NULL) {
-      if (is_new_line(line)) {
+      if (is_empty(line)) {
         match_index = 0;
         round_index++;
         (*round_count)++;
@@ -96,6 +106,8 @@ void load_match_results(Round *rounds, int *round_count, const char *file_name) 
         match_index++;
         if (*round_count == 0)
           *round_count = 1;
+
+        rounds[round_index].number = *round_count;
       }
     }
     fclose(handle);
@@ -105,17 +117,50 @@ void load_match_results(Round *rounds, int *round_count, const char *file_name) 
   }
 }
 
-void print_matches_goals_above_limit(const Round *rounds, int round_count, int limit) {
+void compute_total_goals(Round *rounds, int round_count) {
   int i, j, total_goals;
+  Match *match;
+
+  for (i = 0; i < round_count; i++) {
+    rounds[i].total_goals = 0;
+    for (j = 0; j < MAX_MATCHES_PER_ROUND; j++) {
+      match = &rounds[i].matches[j];
+      total_goals = match->home_goals + match->away_goals;
+      match->total_goals = total_goals;
+      rounds[i].total_goals += total_goals;
+    }
+  }
+}
+
+void print_matches_goals_above_limit(const Round *rounds, int round_count, int limit) {
+  int i, j;
   Match *match;
 
   for (i = 0; i < round_count; i++) {
     for (j = 0; j < MAX_MATCHES_PER_ROUND; j++) {
       match = &rounds[i].matches[j];
-      total_goals = match->home_goals + match->away_goals;
-      if (total_goals > limit)
+      if (match->total_goals > limit)
         print_match(match);
     }
+  }
+}
+
+int compare_rounds_by_total_goals(const void *a, const void *b) {
+  Round *round1 = (Round *)a;
+  Round *round2 = (Round *)b;
+  int goals_diff = round2->total_goals - round1->total_goals;
+
+  if (goals_diff == 0)
+    return round1->number - round2->number;
+
+  return goals_diff;
+}
+
+void print_round_with_most_goals(Round *rounds, int round_count) {
+  if (round_count > 0) {
+    qsort(rounds, round_count, sizeof(Round), compare_rounds_by_total_goals);
+    printf("Most goals scored in round #%d with %d goals\n",
+        rounds[0].number, rounds[0].total_goals);
   }
 }
 
@@ -124,9 +169,11 @@ int main(void) {
   int round_count;
 
   load_match_results(rounds, &round_count, "superliga-2013-2014");
-  printf("\nRounds %d \n", round_count);
+  compute_total_goals(rounds, round_count);
 
   print_matches_goals_above_limit(rounds, round_count, 6);
+
+  print_round_with_most_goals(rounds, round_count);
 
   return 0;
 }
