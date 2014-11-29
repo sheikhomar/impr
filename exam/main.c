@@ -82,6 +82,7 @@ void load_match_results(Round *rounds, int *round_count, const char *file_name) 
       if (is_new_line(line)) {
         /*printf(" NEW LINE! ###### \n");*/
         match_index = 0;
+        round_index++;
         (*round_count)++;
       } else {
         printf(" Line to Parse: %s ", line);
