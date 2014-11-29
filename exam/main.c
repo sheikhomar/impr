@@ -3,7 +3,12 @@
 #include <string.h>
 #include <assert.h>
 
-#define MAX_CHARS_PER_LINE 200
+/* Assume each line in the provided file to contain 58 characters */
+#define MAX_CHARS_PER_LINE 60
+
+/* Assume that there can only be six matches per round */
+#define MAX_MATCHES_PER_ROUND 6
+#define MAX_ROUNDS 33
 
 struct match {
   char weekday[5];
@@ -22,7 +27,7 @@ typedef struct match Match;
 
 struct round {
   unsigned char number;
-  Match matches[6];
+  Match matches[MAX_MATCHES_PER_ROUND];
 };
 
 typedef struct round Round;
@@ -32,14 +37,18 @@ int is_new_line(char *string) {
 }
 
 void print_match(Match *match) {
-  printf(" { \n");
-  printf("  weekday:     %s, \n", match->weekday);
-  printf("  day/month:   %i/%i,\n", match->day, match->month);
-  printf("  time:        %i:%i, \n", match->hour, match->minute);
-  printf("  home_team:   %s(%i), \n", match->home_team, match->home_goals);
-  printf("  away_team:   %s(%i), \n", match->away_team, match->away_goals);
-  printf("  spectators:  %i\n", match->spectator_count);
-  printf(" }\n");
+  printf("%s %02d/%02d %02d:%02d  %3s vs. %3s [%d:%d] (%6d)\n",
+      match->weekday,
+      match->day,
+      match->month,
+      match->hour,
+      match->minute,
+      match->home_team,
+      match->away_team,
+      match->home_goals,
+      match->away_goals,
+      match->spectator_count
+      );
 }
 
 void parse_match(Match *match, const char *line) {
@@ -64,13 +73,13 @@ void parse_match(Match *match, const char *line) {
     spectator_count *= 1000;
   match->spectator_count = spectator_count;
 
+  print_match(match);
+
   assert(scan_res == 10);
 }
 
 void load_match_results(Round *rounds, int *round_count, const char *file_name) {
-  int i = 0;
-  int round_index = 0;
-  int match_index = 0;
+  int round_index = 0, match_index = 0;
   char line[MAX_CHARS_PER_LINE];
   FILE *handle;
   Match *match;
@@ -80,16 +89,15 @@ void load_match_results(Round *rounds, int *round_count, const char *file_name) 
   if (handle != NULL) {
     while (fgets(line, MAX_CHARS_PER_LINE, handle) != NULL) {
       if (is_new_line(line)) {
-        /*printf(" NEW LINE! ###### \n");*/
         match_index = 0;
         round_index++;
         (*round_count)++;
       } else {
-        printf(" Line to Parse: %s ", line);
         match = &(rounds[round_index].matches[match_index]);
         parse_match(match, line);
         match_index++;
-        i++;
+        if (*round_count == 0)
+          *round_count = 1;
       }
     }
     fclose(handle);
@@ -100,11 +108,11 @@ void load_match_results(Round *rounds, int *round_count, const char *file_name) 
 }
 
 int main(void) {
-  Round rounds[33];
+  Round rounds[MAX_ROUNDS];
   int round_count;
 
   load_match_results(rounds, &round_count, "superliga-2013-2014");
-  printf("\nRounds %i \n", round_count);
+  printf("\nRounds %d \n", round_count);
 
   return 0;
 }
