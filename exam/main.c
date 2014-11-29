@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <limits.h>
 
 /* Assume each line in the provided file to contain 58 characters */
 #define MAX_CHARS_PER_LINE 60
@@ -38,6 +39,7 @@ struct team {
   char name[4];
   int home_wins;
   int away_wins;
+  int lowest_home_spectators;
 };
 
 typedef struct team Team;
@@ -164,16 +166,99 @@ void print_round_with_most_goals(Round *rounds, int round_count) {
   }
 }
 
+Team *find_or_create_team(Team teams[], int *team_count, const char *team_name) {
+  int i = 0, found = 0;
+
+  for (i = 0; i < *team_count; i++) {
+    if (strcmp(teams[i].name, team_name) == 0) {
+      found = 1;
+      break;
+    }
+  }
+
+  if (!found) {
+    strcpy(teams[i].name, team_name);
+    teams[i].home_wins = 0;
+    teams[i].away_wins = 0;
+    teams[i].lowest_home_spectators = INT_MAX;
+    (*team_count)++;
+  }
+
+  return &teams[i];
+}
+
+void build_team_structures(const Round rounds[], int round_count, Team teams[], int *team_count) {
+  int i, j;
+  Match *match;
+  Team *home_team, *away_team;
+
+  *team_count = 0;
+  for (i = 0; i < round_count; i++) {
+    for (j = 0; j < MAX_MATCHES_PER_ROUND; j++) {
+      match = &rounds[i].matches[j];
+
+      home_team = find_or_create_team(teams, team_count, match->home_team);
+      if (match->home_goals > match->away_goals) {
+        home_team->home_wins++;
+      }
+
+      if (match->spectator_count < home_team->lowest_home_spectators)
+        home_team->lowest_home_spectators = match->spectator_count;
+
+      away_team = find_or_create_team(teams, team_count, match->away_team);
+      if (match->away_goals > match->home_goals) {
+        away_team->away_wins++;
+      }
+    }
+  }
+}
+
+void print_teams_with_more_away_wins(const Team teams[], int team_count) {
+  int i;
+
+  printf("Teams with more aways wins than home wins:\n");
+  for (i = 0; i < team_count; i++) {
+    if (teams[i].away_wins > teams[i].home_wins) {
+      printf(" Team: %s %d %d\n",
+          teams[i].name,
+          teams[i].home_wins,
+          teams[i].away_wins);
+    }
+  }
+}
+
+
+int compare_teams_by_spectator_count(const void *a, const void *b) {
+  Team *team1 = (Team *)a;
+  Team *team2 = (Team *)b;
+
+  return team1->lowest_home_spectators - team2->lowest_home_spectators;
+}
+void print_team_with_lowest_spectator_count_at_home(Team teams[], int team_count) {
+  if (team_count > 0) {
+    qsort(teams, team_count, sizeof(Team), compare_teams_by_spectator_count);
+    printf("%s is the team with the lowest spectator count %d at home!\n",
+        teams[0].name, teams[0].lowest_home_spectators);
+  }
+}
+
 int main(void) {
   Round rounds[MAX_ROUNDS];
+  Team teams[12];
   int round_count;
+  int team_count;
 
   load_match_results(rounds, &round_count, "superliga-2013-2014");
   compute_total_goals(rounds, round_count);
+  build_team_structures(rounds, round_count, teams, &team_count);
 
   print_matches_goals_above_limit(rounds, round_count, 6);
 
   print_round_with_most_goals(rounds, round_count);
+
+  print_teams_with_more_away_wins(teams, team_count);
+
+  print_team_with_lowest_spectator_count_at_home(teams, team_count);
 
   return 0;
 }
