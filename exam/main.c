@@ -36,7 +36,7 @@ int is_new_line(char *string) {
   return strcmp(string, "\r\n") == 0;
 }
 
-void print_match(Match *match) {
+void print_match(const Match *match) {
   printf("%s %02d/%02d %02d:%02d  %3s vs. %3s [%d:%d] (%6d)\n",
       match->weekday,
       match->day,
@@ -73,8 +73,6 @@ void parse_match(Match *match, const char *line) {
     spectator_count *= 1000;
   match->spectator_count = spectator_count;
 
-  print_match(match);
-
   assert(scan_res == 10);
 }
 
@@ -107,12 +105,28 @@ void load_match_results(Round *rounds, int *round_count, const char *file_name) 
   }
 }
 
+void print_matches_goals_above_limit(const Round *rounds, int round_count, int limit) {
+  int i, j, total_goals;
+  Match *match;
+
+  for (i = 0; i < round_count; i++) {
+    for (j = 0; j < MAX_MATCHES_PER_ROUND; j++) {
+      match = &rounds[i].matches[j];
+      total_goals = match->home_goals + match->away_goals;
+      if (total_goals > limit)
+        print_match(match);
+    }
+  }
+}
+
 int main(void) {
   Round rounds[MAX_ROUNDS];
   int round_count;
 
   load_match_results(rounds, &round_count, "superliga-2013-2014");
   printf("\nRounds %d \n", round_count);
+
+  print_matches_goals_above_limit(rounds, round_count, 6);
 
   return 0;
 }
