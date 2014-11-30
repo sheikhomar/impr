@@ -242,6 +242,38 @@ void print_team_with_lowest_spectator_count_at_home(Team teams[], int team_count
   }
 }
 
+void print_matches_played_on(const Round rounds[], int round_count, const char *weekday,
+    const char *from, const char *to) {
+  int i, j, scan_res, from_hour, from_minute, to_hour, to_minute;
+  int filter_start, filter_end;
+  int match_time;
+  Match *match;
+
+  scan_res = sscanf(from, " %d.%d", &from_hour, &from_minute);
+  assert(scan_res == 2);
+  filter_start = from_hour * 60 + from_minute;
+
+  scan_res = sscanf(to, " %d.%d", &to_hour, &to_minute);
+  assert(scan_res == 2);
+  filter_end = to_hour * 60 + to_minute;
+
+  printf("Matches played on %s from %s to %s:\n", weekday, from, to);
+
+  for (i = 0; i < round_count; i++) {
+    for (j = 0; j < MAX_MATCHES_PER_ROUND; j++) {
+      match = &rounds[i].matches[j];
+
+      if (strcmp(match->weekday, weekday) == 0) {
+        match_time = match->hour * 60 + match->minute;
+
+        if (match_time >= filter_start && match_time <= filter_end)
+          print_match(match);
+      }
+    }
+  }
+}
+
+
 int main(void) {
   Round rounds[MAX_ROUNDS];
   Team teams[12];
@@ -259,6 +291,8 @@ int main(void) {
   print_teams_with_more_away_wins(teams, team_count);
 
   print_team_with_lowest_spectator_count_at_home(teams, team_count);
+
+  print_matches_played_on(rounds, round_count, "Fre", "18.05", "19.05");
 
   return 0;
 }
