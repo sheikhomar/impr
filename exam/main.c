@@ -4,11 +4,21 @@
 #include <assert.h>
 #include <limits.h>
 
+/**
+ * These constants are based on assumptions made for the input file.
+ * Asserts are used throughout the code to ensure that these
+ * assumptions are not violated.
+ **/
 #define MAX_CHARS_PER_LINE 60
 #define MAX_MATCHES_PER_ROUND 6
 #define MAX_ROUNDS 33
 #define MAX_TEAMS 12
 
+/** Represents fields of a non-blank line in the input file.
+ *
+ * The structure is created in order to encapsulate
+ * parsing logic into a separate function.
+ **/
 struct line_info {
   char weekday[4];
   int day;
@@ -20,26 +30,45 @@ struct line_info {
   int home_goals;
   int away_goals;
   int spectator_count;
-  int total_goals;
-};
 
+  /* String version of spectator_count. The sole function of
+   * str_spectator_count is to facilitate number conversion. */
+  char str_spectator_count[10];
+};
 typedef struct line_info LineInfo;
+
+/** Represents a round in a tournament.
+ *
+ * This structure makes it easy to solve problems like
+ * sorting rounds by goals scored in the round. The structure
+ * could also be extended to keep track of matches played
+ * in a given round.
+ **/
 struct round {
   int number;
   int total_goals;
 };
-
 typedef struct round Round;
 
+/** Represents a team in a tournament.
+ **/
 struct team {
   char name[4];
   int home_wins;
   int away_wins;
   int lowest_home_spectators;
+  int won_matches;
+  int tied_matches;
+  int lost_matches;
+  int goals_scored;
+  int goals_against;
+  int goals_diff;
+  int points;
 };
-
 typedef struct team Team;
 
+/** Represents a match in a tournament.
+ **/
 struct match {
   char weekday[5];
   int day;
@@ -50,30 +79,38 @@ struct match {
   int away_goals;
   int spectator_count;
   int total_goals;
+  int round;
   Team *away_team;
   Team *home_team;
-  int round;
 };
-
 typedef struct match Match;
 
+/** Represents a tournament.
+ *
+ * This structure makes use of statically allocated arrays in stead of
+ * dynamically allocated arrays.
+ * The design rationale for this decision are as follows:
+ *  1) Input file is relative small.
+ *  2) Memory usage is not an issue.
+ **/
 struct tournament {
   Match matches[MAX_MATCHES_PER_ROUND * MAX_ROUNDS];
   int match_count;
-
   Team teams[MAX_TEAMS];
   int team_count;
-
   Round rounds[MAX_ROUNDS];
   int round_count;
 };
-
 typedef struct tournament Tournament;
 
-int is_empty(char *line) {
+/** Determines whether the given line marks the end of a round in the input file.
+ **/
+int is_end_marker_for_round(char *line) {
   return strcmp(line, "\r\n") == 0;
 }
 
+/** Prints match details to the standard output.
+ **/
 void print_match(const Match *match) {
   printf(" (Round %02d) %s %02d/%02d %02d:%02d  %3s vs. %3s [%d:%d|%d] (%6d)\n",
       match->round,
@@ -91,10 +128,12 @@ void print_match(const Match *match) {
       );
 }
 
+/** Prints a list of matches filtered by goals.
+ **/
 void print_matches_by_goals_scored(const Match matches[], int match_count, int goals) {
   int i;
 
-  printf("Matches with %d or more goals:\n", goals);
+  printf("\n\n1) Matches with %d or more goals:\n\n", goals);
   for (i = 0; i < match_count; i++)
     if (matches[i].total_goals >= goals)
       print_match(&matches[i]);
@@ -103,47 +142,37 @@ void print_matches_by_goals_scored(const Match matches[], int match_count, int g
 int compare_rounds_by_total_goals(const void *a, const void *b) {
   Round *round1 = (Round *)a;
   Round *round2 = (Round *)b;
+
+  /* Compares using substraction instead of if-conditions.
+   * First sort by goals in descending order... */
   int goals_diff = round2->total_goals - round1->total_goals;
 
+  /* ... then sort by number in ascending order */
   if (goals_diff == 0)
     return round1->number - round2->number;
 
   return goals_diff;
 }
 
-void print_round_with_most_goals(Round rounds[], int round_count) {
+
+/** Prints the round with the highest goal score.
+ **/
+void print_round_with_highest_goal_score(Round rounds[], int round_count) {
   if (round_count > 0) {
+    /* Sort rounds by array in descending order */
     qsort(rounds, round_count, sizeof(Round), compare_rounds_by_total_goals);
-    printf("Most goals scored in round #%d with %d goals\n",
+
+    printf("\n\n2) Round %d has the highest goal score with %d goals\n",
         rounds[0].number, rounds[0].total_goals);
   }
 }
 
-Team *find_or_create_team2(Team teams[], int *team_count, const char *team_name) {
-  int i = 0, found = 0;
-
-  for (i = 0; i < *team_count; i++) {
-    if (strcmp(teams[i].name, team_name) == 0) {
-      found = 1;
-      break;
-    }
-  }
-
-  if (!found) {
-    strcpy(teams[i].name, team_name);
-    teams[i].home_wins = 0;
-    teams[i].away_wins = 0;
-    teams[i].lowest_home_spectators = INT_MAX;
-    (*team_count)++;
-  }
-
-  return &teams[i];
-}
-
+/** Prints a list of teams that have more away wins than home wins.
+ * */
 void print_teams_with_more_away_wins(const Team teams[], int team_count) {
   int i;
 
-  printf("Teams with more aways wins than home wins:\n");
+  printf("\n\n3) Teams with more aways wins than home wins:\n");
   for (i = 0; i < team_count; i++) {
     if (teams[i].away_wins > teams[i].home_wins) {
       printf(" - %s has %d away wins and %d home wins \n",
@@ -154,6 +183,9 @@ void print_teams_with_more_away_wins(const Team teams[], int team_count) {
   }
 }
 
+/**
+ * Compare two teams by lowest_home_spectators.
+ **/
 int compare_teams_by_spectator_count(const void *a, const void *b) {
   Team *team1 = (Team *)a;
   Team *team2 = (Team *)b;
@@ -164,43 +196,125 @@ int compare_teams_by_spectator_count(const void *a, const void *b) {
 void print_team_with_lowest_spectator_count_at_home(Team teams[], int team_count) {
   if (team_count > 0) {
     qsort(teams, team_count, sizeof(Team), compare_teams_by_spectator_count);
-    printf("%s is the team with the lowest spectator count %d at home!\n",
+    printf("\n\n4) The team with lowest spectator count at home is %s with only %d spectators!\n",
         teams[0].name, teams[0].lowest_home_spectators);
   }
 }
 
-/*
-void print_matches_played_on(const Round rounds[], int round_count, const char *weekday,
-    const char *from, const char *to) {
-  int i, j, scan_res, from_hour, from_minute, to_hour, to_minute;
-  int filter_start, filter_end;
-  int match_time;
+/** Parses a string that contains time in the format 'HH.MM'.
+ **/
+void parse_time(const char formatted_time[], int *hours, int *minutes) {
+  int scan_res;
+
+  scan_res = sscanf(formatted_time, " %d.%d", hours, minutes);
+
+  /* Make sure our assumptions are correct. */
+  assert(scan_res == 2);
+}
+
+int get_minutes_since_midnight(int hours, int minutes) {
+  return hours * 60 + minutes;
+}
+
+/** Parses a string that contains time in the format 'HH.MM' and
+ * converts it to minutes since midnight.
+ **/
+int parse_time_as_minutes_since_midnight(const char formatted_time[]) {
+  int hours, minutes;
+
+  parse_time(formatted_time, &hours, &minutes);
+
+  return get_minutes_since_midnight(hours, minutes);
+}
+
+/** Compares two matches by goals.
+ **/
+int compare_matches_by_total_goals(const void *a, const void *b) {
+  Match *match1 = (Match *)a;
+  Match *match2 = (Match *)b;
+
+  return match2->total_goals - match1->total_goals;
+}
+
+/** Prints a sorted list of matches that are played on a certain weekday
+ *  and within a certain time period.
+ */
+void print_matches_by_weekday(Match matches[], int match_count, const char *weekday,
+    const char start_time[], const char end_time[]) {
+
+  int i, filter_start_time, filter_end_time, match_time;
   Match *match;
 
-  scan_res = sscanf(from, " %d.%d", &from_hour, &from_minute);
-  assert(scan_res == 2);
-  filter_start = from_hour * 60 + from_minute;
+  /* Setup time filters */
+  filter_start_time = parse_time_as_minutes_since_midnight(start_time);
+  filter_end_time = parse_time_as_minutes_since_midnight(end_time);
 
-  scan_res = sscanf(to, " %d.%d", &to_hour, &to_minute);
-  assert(scan_res == 2);
-  filter_end = to_hour * 60 + to_minute;
+  /* Sort the list of matches by total goals in descending order */
+  qsort(matches, match_count, sizeof(Match), compare_matches_by_total_goals);
 
-  printf("Matches played on %s from %s to %s:\n", weekday, from, to);
+  printf("\n\n5) Matches played on %s from %s to %s:\n\n", weekday, start_time, end_time);
 
-  for (i = 0; i < round_count; i++) {
-    for (j = 0; j < MAX_MATCHES_PER_ROUND; j++) {
-      match = &rounds[i].matches[j];
+  for (i = 0; i < match_count; i++) {
+    match = &matches[i];
 
-      if (strcmp(match->weekday, weekday) == 0) {
-        match_time = match->hour * 60 + match->minute;
-
-        if (match_time >= filter_start && match_time <= filter_end)
-          print_match(match);
-      }
+    if (strcmp(match->weekday, weekday) == 0) {
+      match_time = get_minutes_since_midnight(match->hour, match->minute);
+      if (match_time >= filter_start_time && match_time <= filter_end_time)
+        print_match(match);
     }
   }
 }
-*/
+
+/** Compares two teams by points.
+ **/
+int compare_teams_by_points(const void *a, const void *b) {
+  Team *team1 = (Team *)a;
+  Team *team2 = (Team *)b;
+
+  return team2->points - team1->points;
+}
+
+/** Prints points table for alle teams.
+ */
+void print_points_table(Team teams[], int team_count) {
+  int i;
+  Team *team;
+
+  /* Sort teams by points in descending order */
+  qsort(teams, team_count, sizeof(Team), compare_teams_by_points);
+
+  /* Print out the score */
+  printf("\n\n6) Team points table:\n\n");
+  printf(" No  Team   W    T    L   G+    G-    +/-    P\n");
+  printf("-----------------------------------------------\n");
+  for (i = 0; i < team_count; i++) {
+    team = &teams[i];
+    printf("%3d  %-3s   %2d   %2d   %2d   %2d    %2d    %+3d   %2d\n",
+        i+1,
+        team->name,
+        team->won_matches,
+        team->tied_matches,
+        team->lost_matches,
+        team->goals_scored,
+        team->goals_against,
+        team->goals_diff,
+        team->points
+        );
+  }
+}
+
+/**
+ * Prints out all solutions with default input.
+ */
+void print_all(Tournament *tournament) {
+  printf("Running program with --print argument.");
+  print_matches_by_goals_scored(tournament->matches, tournament->match_count, 7);
+  print_round_with_highest_goal_score(tournament->rounds, tournament->round_count);
+  print_teams_with_more_away_wins(tournament->teams, tournament->team_count);
+  print_team_with_lowest_spectator_count_at_home(tournament->teams, tournament->team_count);
+  print_matches_by_weekday(tournament->matches, tournament->match_count, "Fre", "18.05", "19.05");
+  print_points_table(tournament->teams, tournament->team_count);
+}
 
 int convert_to_int(const char input[]) {
   double return_value = 0.0;
@@ -211,66 +325,107 @@ int convert_to_int(const char input[]) {
   return (int)(return_value * 1000);
 }
 
-void parse_line(LineInfo *line_info, const char line[]) {
+/** Parses the given line of text and stores values into
+ * a LineInfo structure.
+ **/
+LineInfo *parse_line(const char line[]) {
+  /* Make use of the static storage class to avoid allocating
+   * memory each time this function is called. */
+  static LineInfo line_info;
   int scan_res;
-  char str_spectator_count[10];
 
   scan_res = sscanf(line, " %s %d/%d %d.%d %s - %s %d - %d %[^ ]",
-       line_info->weekday,
-      &line_info->day,
-      &line_info->month,
-      &line_info->hour,
-      &line_info->minute,
-       line_info->home_team,
-       line_info->away_team,
-      &line_info->home_goals,
-      &line_info->away_goals,
-       str_spectator_count
+       line_info.weekday,
+      &line_info.day,
+      &line_info.month,
+      &line_info.hour,
+      &line_info.minute,
+       line_info.home_team,
+       line_info.away_team,
+      &line_info.home_goals,
+      &line_info.away_goals,
+       line_info.str_spectator_count
       );
 
   /* Fail fast if line format is incorrect */
   assert(scan_res == 10);
 
-  line_info->spectator_count = convert_to_int(str_spectator_count);
+  line_info.spectator_count = convert_to_int(line_info.str_spectator_count);
+
+  /* It is not a problem to return the reference of a local variable
+   * because it has the static storage class, which means that
+   * the local variable is preserved upon function completion. */
+  return &line_info;
 }
 
+/** Initializes a Team structure with the given name.
+ **/
 void initialize_team(Team *team, const char team_name[]) {
   strcpy(team->name, team_name);
   team->home_wins = 0;
   team->away_wins = 0;
   team->lowest_home_spectators = INT_MAX;
+  team->won_matches = 0;
+  team->tied_matches = 0;
+  team->lost_matches = 0;
+  team->goals_scored = 0;
+  team->goals_against = 0;
+  team->goals_diff = 0;
+  team->points = 0;
 }
 
-/* Finds a team in a tournament by name. If a team with the given team_name
- * does not exist, a new team is created in the tournament */
-Team *find_or_create_team(Tournament *tournament, const char team_name[]) {
-  int i = 0;
+/** Creates a new team in the tournament.
+ **/
+Team *create_team(Tournament *tournament, const char team_name[]) {
   Team *team = NULL;
 
-  /* Search for a team in the tournament */
+  /* A new team is created by simply incrementing team_count variable
+   * in the tournament instance. */
+  tournament->team_count++;
+
+  /* Fail fast if amount of teams exceeded reserved memory */
+  assert(tournament->team_count <= MAX_TEAMS);
+
+  team = &tournament->teams[tournament->team_count - 1];
+
+  initialize_team(team, team_name);
+
+  return team;
+}
+
+/** Finds a team in the tournament. If the team doesn't exist
+ * NULL is returned.
+ **/
+Team *find_team_by_name(Tournament *tournament, const char team_name[]) {
+  int i = 0;
+
   for (i = 0; i < tournament->team_count; i++) {
     if (strcmp(tournament->teams[i].name, team_name) == 0) {
-      team = &tournament->teams[i];
-      break;
+      return &tournament->teams[i];
     }
   }
 
+  return NULL;
+}
+
+/** Finds a team in the tournament by name. If the team is
+ *  not found, a new team is created in the tournament.
+ **/
+Team *find_or_create_team(Tournament *tournament, const char team_name[]) {
+  Team *team = NULL;
+
+  team = find_team_by_name(tournament, team_name);
+
   if (!team) {
-    /* A new team is created by simply incrementing team_count variable
-     * in the tournament instance. */
-    tournament->team_count++;
-
-    /* Fail fast if amount of teams exceeded reserved memory */
-    assert(tournament->team_count <= MAX_TEAMS);
-
-    team = &tournament->teams[tournament->team_count - 1];
-
-    initialize_team(team, team_name);
+    team = create_team(tournament, team_name);
   }
 
   return team;
 }
 
+/** Initializes a Match structure using information from
+ *  LineInfo structure.
+ **/
 void initialize_match(Match *match, LineInfo *line_info) {
   strcpy(match->weekday, line_info->weekday);
 
@@ -284,8 +439,9 @@ void initialize_match(Match *match, LineInfo *line_info) {
   match->total_goals = match->home_goals + match->away_goals;
 }
 
-/* Create a match in a tournament */
-Match *build_match(Tournament *tournament, int round, LineInfo *line_info) {
+/** Creates a match in the tournament.
+ **/
+Match *create_match(Tournament *tournament, int round, LineInfo *line_info) {
   Match *match;
 
   /* A new match is created by incrementing counter variable
@@ -306,16 +462,16 @@ Match *build_match(Tournament *tournament, int round, LineInfo *line_info) {
   return match;
 }
 
-void reset_round(Round *round) {
-  round->number = 0;
+/** Initializes a Round structure with default values.
+ **/
+void initialize_round(Round *round, int round_number) {
+  round->number = round_number;
   round->total_goals = 0;
 }
 
-/* Build a round of matches in a tournament given lines of matches */
-void build_rounds(Tournament *tournament, char match_lines[][MAX_CHARS_PER_LINE], int line_count) {
-  int i = 0;
-  LineInfo line_info;
-  Match *match;
+/** Creates a new round in the tournament.
+ **/
+Round *create_round(Tournament *tournament) {
   Round *round;
 
   /* A new round is created by incrementing counter variable
@@ -325,72 +481,134 @@ void build_rounds(Tournament *tournament, char match_lines[][MAX_CHARS_PER_LINE]
   /* Fail fast if amount of rounds exceeds reserved memory */
   assert(tournament->round_count <= MAX_ROUNDS);
 
-  /* Fetch the next object */
   round = &tournament->rounds[tournament->round_count - 1];
+  initialize_round(round, tournament->round_count);
 
-  reset_round(round);
+  return round;
+}
 
-  round->number = tournament->round_count;
+/** Builds a round of matches in the tournament given lines of matches.
+ */
+void build_round_matches(Tournament *tournament, char match_lines[][MAX_CHARS_PER_LINE], int line_count) {
+  int i = 0;
+  LineInfo *line_info;
+  Match *match;
+  Round *round;
+
+  round = create_round(tournament);
 
   for (i = 0; i < line_count; i++) {
-    parse_line(&line_info, match_lines[i]);
-    match = build_match(tournament, tournament->round_count, &line_info);
+    line_info = parse_line(match_lines[i]);
+    match = create_match(tournament, tournament->round_count, line_info);
     round->total_goals += match->total_goals;
   }
 }
 
-/* Resets a Tournament instance */
-void reset_tournament(Tournament *tournament) {
+/** Updates match statistics.
+**/
+void update_match_stats_for_teams(Match matches[], int match_count) {
+  int i;
+  Match *match;
+  Team *home_team, *away_team;
+
+  for (i = 0; i < match_count; i++) {
+    /* Set convenience variables */
+    match = &matches[i];
+    home_team = match->home_team;
+    away_team = match->away_team;
+
+    /* Update match stats */
+    if (match->home_goals > match->away_goals) {
+      home_team->home_wins++;
+      home_team->won_matches++;
+      away_team->lost_matches++;
+    } else if (match->away_goals > match->home_goals) {
+      away_team->away_wins++;
+      away_team->won_matches++;
+      home_team->lost_matches++;
+    } else {
+      home_team->tied_matches++;
+      away_team->tied_matches++;
+    }
+
+    /* Update goal stats */
+    home_team->goals_scored += match->home_goals;
+    home_team->goals_against += match->away_goals;
+    away_team->goals_scored += match->away_goals;
+    away_team->goals_against += match->home_goals;
+
+    /* Update spectator stats */
+    if (match->spectator_count < home_team->lowest_home_spectators)
+      home_team->lowest_home_spectators = match->spectator_count;
+  }
+}
+
+/** Computes goals and points for each team.
+ **/
+void compute_team_stats(Team teams[], int team_count) {
+  int i;
+  Team *team;
+
+  for (i = 0; i < team_count; i++) {
+    team = &teams[i];
+
+    team->goals_diff = team->goals_scored - team->goals_against;
+    team->points = team->won_matches * 3 + team->tied_matches;
+  }
+}
+
+/** Updates tournament statistics.
+ **/
+void update_tournament_stats(Tournament *tournament) {
+
+  update_match_stats_for_teams(tournament->matches, tournament->match_count);
+
+  compute_team_stats(tournament->teams, tournament->team_count);
+}
+
+/** Initializes a Tournament structure with default values.
+ **/
+void initialize_tournament(Tournament *tournament) {
   tournament->match_count = 0;
   tournament->team_count = 0;
   tournament->round_count = 0;
 }
 
-void update_team_stats(Tournament *tournament) {
-  int i;
-  Match *match;
-  Team *home_team, *away_team;
+/** Creates a new tournament.
+ */
+Tournament *create_tournament() {
+  Tournament *tournament = NULL;
 
-  for (i = 0; i < tournament->match_count; i++) {
-    match = &tournament->matches[i];
-    home_team = match->home_team;
-    away_team = match->away_team;
+  tournament = (Tournament *)malloc(sizeof(Tournament));
+  initialize_tournament(tournament);
 
-    if (match->home_goals > match->away_goals)
-      home_team->home_wins++;
-
-    if (match->spectator_count < home_team->lowest_home_spectators)
-      home_team->lowest_home_spectators = match->spectator_count;
-
-    if (match->away_goals > match->home_goals)
-      away_team->away_wins++;
-  }
+  return tournament;
 }
 
-/* Builds a Tournament instance using the given file */
-void build_tournament(Tournament *tournament, char file_name[]) {
+
+/** Build a new tournament using data from file.
+ **/
+Tournament *build_tournament(char file_name[]) {
   FILE *handle;
   char line[MAX_CHARS_PER_LINE];
   char match_lines[MAX_MATCHES_PER_ROUND][MAX_CHARS_PER_LINE];
   int line_index = 0;
+  Tournament *tournament = NULL;
 
   handle = fopen(file_name, "r");
 
   if (handle != NULL) {
-    reset_tournament(tournament);
+    tournament = create_tournament();
 
     while (fgets(line, MAX_CHARS_PER_LINE, handle) != NULL) {
-      /*printf("%d: %s", line_index, line);*/
-      if (is_empty(line)) {
+      if (is_end_marker_for_round(line)) {
         /* Delegate the actual parsing to another function */
-        build_rounds(tournament, match_lines, line_index);
-
-        /* Restart the line index */
+        build_round_matches(tournament, match_lines, line_index);
         line_index = 0;
       } else {
         /* Fail fast if input file contains more matches
          * per round than reserved memory in the program */
-        assert(MAX_MATCHES_PER_ROUND >= line_index + 1);
+        assert(line_index < MAX_MATCHES_PER_ROUND);
         strcpy(match_lines[line_index], line);
         line_index++;
       }
@@ -398,30 +616,30 @@ void build_tournament(Tournament *tournament, char file_name[]) {
 
     fclose(handle);
 
-    if (line_index > 0) {
-      build_rounds(tournament, match_lines, line_index);
-    }
+    if (line_index > 0)
+      build_round_matches(tournament, match_lines, line_index);
 
-    update_team_stats(tournament);
+    /* As the final step update statistics */
+    update_tournament_stats(tournament);
   } else {
     printf("ERROR: File '%s' cannot be opened.\n", file_name);
     exit(-1);
   }
+
+  return tournament;
 }
 
 
-int main(void) {
-  Tournament tournament;
+int main(int argument_count, char *arguments[]){
+  Tournament *tournament;
 
-  build_tournament(&tournament, "superliga-2013-2014");
+  tournament = build_tournament("superliga-2013-2014");
 
-  print_matches_by_goals_scored(tournament.matches, tournament.match_count, 7);
-  print_round_with_most_goals(tournament.rounds, tournament.round_count);
-  print_teams_with_more_away_wins(tournament.teams, tournament.team_count);
-  print_team_with_lowest_spectator_count_at_home(tournament.teams, tournament.team_count);
-  /*
-  print_matches_played_on(rounds, round_count, "Fre", "18.05", "19.05");
-  */
+  if (argument_count > 1 && strcmp(arguments[1], "--print") == 0) {
+    print_all(tournament);
+  }
+
+  free(tournament);
 
   return 0;
 }
