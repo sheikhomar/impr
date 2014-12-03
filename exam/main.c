@@ -1,4 +1,5 @@
-/* Name:  Omar Ali Sheikh
+/**
+ * Name:  Omar Ali Sheikh
  * Group: A400a, SW
  * Email: osheik13@student.aau.dk
  **/
@@ -11,8 +12,6 @@
 
 /**
  * These constants are based on assumptions made for the input file.
- * Asserts are used throughout the code to ensure that these
- * assumptions are not violated.
  **/
 #define MAX_CHARS_PER_LINE 60
 #define MAX_MATCHES_PER_ROUND 6
@@ -582,9 +581,7 @@ void compute_team_stats(Team teams[], int team_count) {
 /** Updates tournament statistics.
  **/
 void update_tournament_stats(Tournament *tournament) {
-
   update_match_stats_for_teams(tournament->matches, tournament->match_count);
-
   compute_team_stats(tournament->teams, tournament->team_count);
 }
 
@@ -604,7 +601,7 @@ Tournament *create_tournament() {
   tournament = (Tournament *)malloc(sizeof(Tournament));
 
   if (tournament == NULL) {
-    printf("create_tournament(): Could not allocate memory for a tournament!");
+    printf("Error in create_tournament(): Could not allocate memory for a tournament!");
     exit(EXIT_FAILURE);
   }
 
@@ -650,8 +647,8 @@ Tournament *build_tournament(char file_name[]) {
     /* As the final step update statistics */
     update_tournament_stats(tournament);
   } else {
-    printf("ERROR: File '%s' cannot be opened.\n", file_name);
-    exit(-1);
+    printf("Error in build_tournament(): File '%s' cannot be opened.\n", file_name);
+    exit(EXIT_FAILURE);
   }
 
   return tournament;
@@ -661,35 +658,55 @@ void destroy_tournament(Tournament *tournament) {
   free(tournament);
 }
 
-/** Clears standard input buffer for unnecessary fluff.
- * Source: http://stackoverflow.com/questions/7898215/how-to-clear-input-buffer-in-c
+/** Clears the rest of the line in standard input.
+ * From: http://people.cs.aau.dk/~normark/impr-c/source-programs/errors-test/Kurt
+ *       /Files/impr-c/sources/notes-and-c/c/note-examples/errors/input-1.txt
  **/
-void clear_stdin_buffer() {
-  while (getchar() != '\n');
+void clear_standard_input_line(void){
+  int ch;
+  while ((ch = getchar()) != '\n' && ch != EOF);
 }
-char get_valid_user_input() {
+
+char get_valid_menu_item() {
   int input = 0;
   do {
     printf("Please enter a number from 1 to 6 (0 to exit): ");
     input = getchar();
-    clear_stdin_buffer();
+    clear_standard_input_line();
   } while (input >= '6' && input <= '0');
 
   return input;
 }
 
-void get_user_filter(char weekday[], char start_time[], char end_time[]) {
+/** Get period filtering options from user.
+ **/
+void get_period_filter(char weekday[], char start_time[], char end_time[]) {
+  int start_hour, start_min,
+      end_hour, end_min,
+      scan_res,
+      valid_input = 0;
 
+  do {
+    printf("Enter a valid filter like \"Fre 18.05 19.05\": ");
+    scan_res = scanf(" %3s %d.%d %d.%d", weekday, &start_hour, &start_min, &end_hour, &end_min);
+    if (scan_res == 5)
+      valid_input = 1;
+    /* FIXME: Do more input validation here if there is time. */
+  } while (!valid_input);
 
+  clear_standard_input_line();
+
+  sprintf(start_time, "%02d.%02d", start_hour, start_min);
+  sprintf(end_time, "%02d.%02d", end_hour, end_min);
 }
 
 void run_interactive(Tournament *tournament) {
-  char input;
+  char menu_item;
   char weekday[4], start_time[6], end_time[6];
 
-  while (input != '0') {
-    input = get_valid_user_input();
-    switch (input) {
+  while (menu_item != '0') {
+    menu_item = get_valid_menu_item();
+    switch (menu_item) {
       case '1':
         print_matches_by_goals_scored(tournament->matches, tournament->match_count, 7);
         break;
@@ -703,9 +720,7 @@ void run_interactive(Tournament *tournament) {
         print_team_with_lowest_spectator_count_at_home(tournament->teams, tournament->team_count);
         break;
       case '5':
-        strcpy(weekday, "Fre");
-        strcpy(start_time, "18.05");
-        strcpy(end_time, "19.05");
+        get_period_filter(weekday, start_time, end_time);
         print_matches_by_weekday(tournament->matches, tournament->match_count, weekday, start_time, end_time);
         break;
       case '6':
