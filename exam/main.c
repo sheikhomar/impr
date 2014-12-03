@@ -1,3 +1,8 @@
+/* Name:  Omar Ali Sheikh
+ * Group: A400a, SW
+ * Email: osheik13@student.aau.dk
+ **/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -652,6 +657,63 @@ Tournament *build_tournament(char file_name[]) {
   return tournament;
 }
 
+void destroy_tournament(Tournament *tournament) {
+  free(tournament);
+}
+
+/** Clears standard input buffer for unnecessary fluff.
+ * Source: http://stackoverflow.com/questions/7898215/how-to-clear-input-buffer-in-c
+ **/
+void clear_stdin_buffer() {
+  while (getchar() != '\n');
+}
+char get_valid_user_input() {
+  int input = 0;
+  do {
+    printf("Please enter a number from 1 to 6 (0 to exit): ");
+    input = getchar();
+    clear_stdin_buffer();
+  } while (input >= '6' && input <= '0');
+
+  return input;
+}
+
+void get_user_filter(char weekday[], char start_time[], char end_time[]) {
+
+
+}
+
+void run_interactive(Tournament *tournament) {
+  char input;
+  char weekday[4], start_time[6], end_time[6];
+
+  while (input != '0') {
+    input = get_valid_user_input();
+    switch (input) {
+      case '1':
+        print_matches_by_goals_scored(tournament->matches, tournament->match_count, 7);
+        break;
+      case '2':
+        print_round_with_highest_goal_score(tournament->rounds, tournament->round_count);
+        break;
+      case '3':
+        print_teams_with_more_away_wins(tournament->teams, tournament->team_count);
+        break;
+      case '4':
+        print_team_with_lowest_spectator_count_at_home(tournament->teams, tournament->team_count);
+        break;
+      case '5':
+        strcpy(weekday, "Fre");
+        strcpy(start_time, "18.05");
+        strcpy(end_time, "19.05");
+        print_matches_by_weekday(tournament->matches, tournament->match_count, weekday, start_time, end_time);
+        break;
+      case '6':
+        print_points_table(tournament->teams, tournament->team_count);
+        break;
+    }
+  }
+}
 
 int main(int argument_count, char *arguments[]){
   Tournament *tournament;
@@ -660,9 +722,11 @@ int main(int argument_count, char *arguments[]){
 
   if (argument_count > 1 && strcmp(arguments[1], "--print") == 0) {
     print_all(tournament);
+  } else {
+    run_interactive(tournament);
   }
 
-  free(tournament);
+  destroy_tournament(tournament);
 
   return 0;
 }
