@@ -10,9 +10,6 @@
 #include <assert.h>
 #include <limits.h>
 
-/**
- * These constants are based on assumptions made for the input file.
- **/
 #define MAX_CHARS_PER_LINE 60
 #define MAX_MATCHES_PER_ROUND 6
 #define MAX_ROUNDS 33
@@ -22,7 +19,7 @@
  *
  * Line parsing logic is encapsulated in a separate function.
  * This structure makes it easy to return parsed values as a
- * single variable.
+ * single variable. Makes the code more clean.
  **/
 struct line_info {
   char weekday[4];
@@ -36,8 +33,8 @@ struct line_info {
   int away_goals;
   int spectator_count;
 
-  /* String version of spectator_count. The sole function of
-   * str_spectator_count is to facilitate number conversion. */
+  /* The sole function of str_spectator_count is to facilitate
+   * number conversion. */
   char str_spectator_count[10];
 };
 typedef struct line_info LineInfo;
@@ -73,6 +70,10 @@ struct team {
 typedef struct team Team;
 
 /** Represents a match in a tournament.
+ *
+ * This structure looks very similar to the LineInfo structure.
+ * The big difference is that a Match structure contains pointers
+ * Team structures.
  **/
 struct match {
   char weekday[5];
@@ -91,12 +92,6 @@ struct match {
 typedef struct match Match;
 
 /** Represents a tournament.
- *
- * This structure makes use of statically allocated arrays in stead of
- * dynamically allocated arrays.
- * The design rationale for this decision are as follows:
- *  1) Input file is relative small.
- *  2) Memory usage is not an issue.
  **/
 struct tournament {
   Match *matches[MAX_MATCHES_PER_ROUND * MAX_ROUNDS];
@@ -159,7 +154,6 @@ int compare_rounds_by_total_goals(const void *a, const void *b) {
   return goals_diff;
 }
 
-
 /** Prints the round with the highest goal score.
  **/
 void print_round_with_highest_goal_score(Round *rounds[], int round_count) {
@@ -213,10 +207,12 @@ void parse_time(const char formatted_time[], int *hours, int *minutes) {
 
   scan_res = sscanf(formatted_time, " %d.%d", hours, minutes);
 
-  /* Make sure our assumptions are correct. */
+  /* Make sure the given formatted_time has the correct format. */
   assert(scan_res == 2);
 }
 
+/** Calculates amount of minutes since midnight.
+ **/
 int get_minutes_since_midnight(int hours, int minutes) {
   return hours * 60 + minutes;
 }
@@ -232,7 +228,7 @@ int parse_time_as_minutes_since_midnight(const char formatted_time[]) {
   return get_minutes_since_midnight(hours, minutes);
 }
 
-/** Compares two matches by goals.
+/** Compares two matches by goals scored. Highest goal count is first.
  **/
 int compare_matches_by_total_goals(const void *a, const void *b) {
   Match *match1 = *((Match **)a);
@@ -275,15 +271,17 @@ void print_matches_by_weekday(Match *matches[], int match_count, const char *wee
 int compare_teams_by_points(const void *a, const void *b) {
   Team *team1 = *((Team **)a);
   Team *team2 = *((Team **)b);
+
+  /* Priority 1: Compare by points */
   int points_diff = team2->points - team1->points;
   int goals_diff = team2->goals_diff - team1->goals_diff;
   int goals_scored_diff = team2->goals_scored - team1->goals_scored;
 
-  /* Priority 1: Compare by goal difference when points are equal */
+  /* Priority 2: Compare by goal difference when points are equal */
   if (points_diff == 0) {
-    /* Priority 2: Compare by total goals scored when goal differences are equal */
+    /* Priority 3: Compare by total goals scored when goal differences are equal */
     if (goals_diff == 0) {
-      /* Priority 3: Compare by name when goals scored are equal */
+      /* Priority 4: Compare by name when amount of goals scored are equal */
       if (goals_scored_diff == 0)
         return strcmp(team2->name, team1->name);
       else
@@ -343,7 +341,6 @@ int convert_to_int(const char input[]) {
 
   sscanf(input, "%lf", &return_value);
 
-  /* FIXME: Pretty ugly! */
   return return_value * 1000;
 }
 
@@ -369,14 +366,11 @@ LineInfo *parse_line(const char line[]) {
        line_info.str_spectator_count
       );
 
-  /* Make sure line format is as expected. */
+  /* Make sure line is formatted correctly! */
   assert(scan_res == 10);
 
   line_info.spectator_count = convert_to_int(line_info.str_spectator_count);
 
-  /* It is not a problem to return the reference of a local variable
-   * because it has the static storage class, which means that
-   * the local variable is preserved upon function completion. */
   return &line_info;
 }
 
