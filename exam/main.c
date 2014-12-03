@@ -597,6 +597,12 @@ Tournament *create_tournament() {
   Tournament *tournament = NULL;
 
   tournament = (Tournament *)malloc(sizeof(Tournament));
+
+  if (tournament == NULL) {
+    printf("create_tournament(): Could not allocate memory for a tournament!");
+    exit(EXIT_FAILURE);
+  }
+
   initialize_tournament(tournament);
 
   return tournament;
