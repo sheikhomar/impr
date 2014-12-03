@@ -20,8 +20,9 @@
 
 /** Represents fields of a non-blank line in the input file.
  *
- * The structure is created in order to encapsulate
- * parsing logic into a separate function.
+ * Line parsing logic is encapsulated in a separate function.
+ * This structure makes it easy to return parsed values as a
+ * single variable.
  **/
 struct line_info {
   char weekday[4];
@@ -272,17 +273,17 @@ void print_matches_by_weekday(Match matches[], int match_count, const char *week
 /** Compares two teams according to the specs.
  **/
 int compare_teams_by_points(const void *a, const void *b) {
-  Team *team1 = (Team *)a,
-       *team2 = (Team *)b;
+  Team *team1 = (Team *)a;
+  Team *team2 = (Team *)b;
   int points_diff = team2->points - team1->points;
   int goals_diff = team2->goals_diff - team1->goals_diff;
   int goals_scored_diff = team2->goals_scored - team1->goals_scored;
 
-  /* Compare by goal difference when points are equal */
+  /* Priority 1: Compare by goal difference when points are equal */
   if (points_diff == 0) {
-    /* Compare by total goals scored when goal differences are equal */
+    /* Priority 2: Compare by total goals scored when goal differences are equal */
     if (goals_diff == 0) {
-      /* Compare by name when goals scored are equal */
+      /* Priority 3: Compare by name when goals scored are equal */
       if (goals_scored_diff == 0)
         return strcmp(team2->name, team1->name);
       else
@@ -337,13 +338,15 @@ void print_all(Tournament *tournament) {
   print_points_table(tournament->teams, tournament->team_count);
 }
 
+/** Converts a formatted string of an integer to integer.
+ **/
 int convert_to_int(const char input[]) {
   double return_value = 0.0;
 
   sscanf(input, "%lf", &return_value);
 
-  /* FIXME: Ugly hack. Research how to do this properly! */
-  return (int)(return_value * 1000);
+  /* FIXME: Pretty ugly! */
+  return return_value * 1000;
 }
 
 /** Parses the given line of text and stores values into
@@ -368,7 +371,7 @@ LineInfo *parse_line(const char line[]) {
        line_info.str_spectator_count
       );
 
-  /* Fail fast if line format is incorrect */
+  /* Make sure line format is as expected. */
   assert(scan_res == 10);
 
   line_info.spectator_count = convert_to_int(line_info.str_spectator_count);
