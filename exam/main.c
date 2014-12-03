@@ -103,7 +103,7 @@ struct tournament {
   int match_count;
   Team teams[MAX_TEAMS];
   int team_count;
-  Round rounds[MAX_ROUNDS];
+  Round *rounds[MAX_ROUNDS];
   int round_count;
 };
 typedef struct tournament Tournament;
@@ -145,8 +145,8 @@ void print_matches_by_goals_scored(const Match matches[], int match_count, int g
 }
 
 int compare_rounds_by_total_goals(const void *a, const void *b) {
-  Round *round1 = (Round *)a;
-  Round *round2 = (Round *)b;
+  Round *round1 = *((Round **)a);
+  Round *round2 = *((Round **)b);
 
   /* Compares using substraction instead of if-conditions.
    * First sort by goals in descending order... */
@@ -162,13 +162,13 @@ int compare_rounds_by_total_goals(const void *a, const void *b) {
 
 /** Prints the round with the highest goal score.
  **/
-void print_round_with_highest_goal_score(Round rounds[], int round_count) {
+void print_round_with_highest_goal_score(Round *rounds[], int round_count) {
   if (round_count > 0) {
     /* Sort rounds by array in descending order */
-    qsort(rounds, round_count, sizeof(Round), compare_rounds_by_total_goals);
+    qsort(rounds, round_count, sizeof(Round *), compare_rounds_by_total_goals);
 
     printf("\n\n2) Round %d has the highest goal score with %d goals\n",
-        rounds[0].number, rounds[0].total_goals);
+        rounds[0]->number, rounds[0]->total_goals);
   }
 }
 
@@ -498,15 +498,20 @@ void initialize_round(Round *round, int round_number) {
 Round *create_round(Tournament *tournament) {
   Round *round;
 
-  /* A new round is created by incrementing counter variable
-   * in the tournament instance. */
+  /* Make sure a new round can be created. */
+  assert(tournament->round_count + 1 <= MAX_ROUNDS);
+
+  round = (Round *)malloc(sizeof(Round));
+
+  if (round == NULL) {
+    printf("Error in create_round(): Could not allocate memory!");
+    exit(EXIT_FAILURE);
+  }
+
+  tournament->rounds[tournament->round_count] = round;
   tournament->round_count++;
 
-  /* Fail fast if amount of rounds exceeds reserved memory */
-  assert(tournament->round_count <= MAX_ROUNDS);
-
-  round = &tournament->rounds[tournament->round_count - 1];
-  initialize_round(round, tournament->round_count);
+  initialize_round(round, tournament->round_count + 1);
 
   return round;
 }
