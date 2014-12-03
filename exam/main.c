@@ -99,7 +99,7 @@ typedef struct match Match;
  *  2) Memory usage is not an issue.
  **/
 struct tournament {
-  Match matches[MAX_MATCHES_PER_ROUND * MAX_ROUNDS];
+  Match *matches[MAX_MATCHES_PER_ROUND * MAX_ROUNDS];
   int match_count;
   Team *teams[MAX_TEAMS];
   int team_count;
@@ -135,13 +135,13 @@ void print_match(const Match *match) {
 
 /** Prints a list of matches filtered by goals.
  **/
-void print_matches_by_goals_scored(const Match matches[], int match_count, int goals) {
+void print_matches_by_goals_scored(Match *matches[], int match_count, int goals) {
   int i;
 
   printf("\n\n1) Matches with %d or more goals:\n\n", goals);
   for (i = 0; i < match_count; i++)
-    if (matches[i].total_goals >= goals)
-      print_match(&matches[i]);
+    if (matches[i]->total_goals >= goals)
+      print_match(matches[i]);
 }
 
 int compare_rounds_by_total_goals(const void *a, const void *b) {
@@ -235,8 +235,8 @@ int parse_time_as_minutes_since_midnight(const char formatted_time[]) {
 /** Compares two matches by goals.
  **/
 int compare_matches_by_total_goals(const void *a, const void *b) {
-  Match *match1 = (Match *)a;
-  Match *match2 = (Match *)b;
+  Match *match1 = *((Match **)a);
+  Match *match2 = *((Match **)b);
 
   return match2->total_goals - match1->total_goals;
 }
@@ -244,7 +244,7 @@ int compare_matches_by_total_goals(const void *a, const void *b) {
 /** Prints a sorted list of matches that are played on a certain weekday
  *  and within a certain time period.
  */
-void print_matches_by_weekday(Match matches[], int match_count, const char *weekday,
+void print_matches_by_weekday(Match *matches[], int match_count, const char *weekday,
     const char start_time[], const char end_time[]) {
 
   int i, filter_start_time, filter_end_time, match_time;
@@ -255,12 +255,12 @@ void print_matches_by_weekday(Match matches[], int match_count, const char *week
   filter_end_time = parse_time_as_minutes_since_midnight(end_time);
 
   /* Sort the list of matches by total goals in descending order */
-  qsort(matches, match_count, sizeof(Match), compare_matches_by_total_goals);
+  qsort(matches, match_count, sizeof(Match *), compare_matches_by_total_goals);
 
   printf("\n\n5) Matches played on %s from %s to %s:\n\n", weekday, start_time, end_time);
 
   for (i = 0; i < match_count; i++) {
-    match = &matches[i];
+    match = matches[i];
 
     if (strcmp(match->weekday, weekday) == 0) {
       match_time = get_minutes_since_midnight(match->hour, match->minute);
@@ -467,14 +467,17 @@ void initialize_match(Match *match, LineInfo *line_info) {
 Match *create_match(Tournament *tournament, int round, LineInfo *line_info) {
   Match *match;
 
-  /* A new match is created by incrementing counter variable
-   * in the tournament instance. */
+  assert(tournament->match_count < MAX_MATCHES_PER_ROUND * MAX_ROUNDS);
+
+  match = (Match *)malloc(sizeof(Match));
+
+  if (match == NULL) {
+    printf("Error in create_match(): Could not allocate memory!");
+    exit(EXIT_FAILURE);
+  }
+
+  tournament->matches[tournament->match_count] = match;
   tournament->match_count++;
-
-  /* Fail fast if amount of teams exceeded reserved memory */
-  assert(tournament->match_count <= MAX_MATCHES_PER_ROUND * MAX_ROUNDS);
-
-  match = &tournament->matches[tournament->match_count - 1];
 
   initialize_match(match, line_info);
 
@@ -534,14 +537,14 @@ void build_round_matches(Tournament *tournament, char match_lines[][MAX_CHARS_PE
 
 /** Updates match statistics.
 **/
-void update_match_stats_for_teams(Match matches[], int match_count) {
+void update_match_stats_for_teams(Match *matches[], int match_count) {
   int i;
   Match *match;
   Team *home_team, *away_team;
 
   for (i = 0; i < match_count; i++) {
     /* Set convenience variables */
-    match = &matches[i];
+    match = matches[i];
     home_team = match->home_team;
     away_team = match->away_team;
 
@@ -658,7 +661,7 @@ Tournament *build_tournament(char file_name[]) {
   return tournament;
 }
 
-void destroy_tournament(Tournament *tournament) {
+void free_memory(Tournament *tournament) {
   int i;
 
   for (i = 0; i < tournament->round_count; i++)
@@ -666,6 +669,9 @@ void destroy_tournament(Tournament *tournament) {
 
   for (i = 0; i < tournament->team_count; i++)
     free(tournament->teams[i]);
+
+  for (i = 0; i < tournament->match_count; i++)
+    free(tournament->matches[i]);
 
   free(tournament);
 }
@@ -753,7 +759,7 @@ int main(int argument_count, char *arguments[]){
     run_interactive(tournament);
   }
 
-  destroy_tournament(tournament);
+  free_memory(tournament);
 
   return 0;
 }
