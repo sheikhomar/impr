@@ -265,13 +265,30 @@ void print_matches_by_weekday(Match matches[], int match_count, const char *week
   }
 }
 
-/** Compares two teams by points.
+/** Compares two teams according to the specs.
  **/
 int compare_teams_by_points(const void *a, const void *b) {
-  Team *team1 = (Team *)a;
-  Team *team2 = (Team *)b;
+  Team *team1 = (Team *)a,
+       *team2 = (Team *)b;
+  int points_diff = team2->points - team1->points;
+  int goals_diff = team2->goals_diff - team1->goals_diff;
+  int goals_scored_diff = team2->goals_scored - team1->goals_scored;
 
-  return team2->points - team1->points;
+  /* Compare by goal difference when points are equal */
+  if (points_diff == 0) {
+    /* Compare by total goals scored when goal differences are equal */
+    if (goals_diff == 0) {
+      /* Compare by name when goals scored are equal */
+      if (goals_scored_diff == 0)
+        return strcmp(team2->name, team1->name);
+      else
+        return goals_scored_diff;
+    } else {
+      return goals_diff;
+    }
+  }
+
+  return points_diff;
 }
 
 /** Prints points table for alle teams.
