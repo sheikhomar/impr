@@ -58,11 +58,14 @@ struct team {
   char name[4];
   int home_wins;
   int away_wins;
+  /* Total amount of spectators in home games */
   int home_spectator_sum;
   int won_matches;
   int tied_matches;
   int lost_matches;
+  /* Total amount of goals scored throughout the tournament */
   int goals_scored;
+  /* Total amount of goals opponent teams have scored in the tournament */
   int goals_against;
   int goals_diff;
   int points;
@@ -836,16 +839,17 @@ int compare_teams_by_points(const void *a, const void *b) {
 
   /* Priority 1: Compare by points */
   int points_diff = team2->points - team1->points;
-  int goals_diff = team2->goals_diff - team1->goals_diff;
-  int goals_scored_diff = team2->goals_scored - team1->goals_scored;
-
   /* Priority 2: Compare by goal difference when points are equal */
+  int goals_diff = team2->goals_diff - team1->goals_diff;
+  /* Priority 3: Compare by total goals scored when goal differences are equal */
+  int goals_scored_diff = team2->goals_scored - team1->goals_scored;
+  /* Priority 4: Compare by name when amount of goals scored are equal */
+  int name_diff = strcmp(team2->name, team1->name);
+
   if (points_diff == 0) {
-    /* Priority 3: Compare by total goals scored when goal differences are equal */
     if (goals_diff == 0) {
-      /* Priority 4: Compare by name when amount of goals scored are equal */
       if (goals_scored_diff == 0)
-        return strcmp(team2->name, team1->name);
+        return name_diff;
       else
         return goals_scored_diff;
     } else {
