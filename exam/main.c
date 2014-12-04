@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include <limits.h>
 
 /* Define limits. These values can be increased if needed */
 #define MAX_CHARS_PER_LINE 60
@@ -59,7 +58,7 @@ struct team {
   char name[4];
   int home_wins;
   int away_wins;
-  int lowest_home_spectators;
+  int home_spectator_sum;
   int won_matches;
   int tied_matches;
   int lost_matches;
@@ -172,7 +171,7 @@ int parse_time_as_minutes_since_midnight(const char formatted_time[]);
 
 /* 2.3) Compare functions used to sort data before writing to stdout */
 int compare_rounds_by_total_goals(const void *a, const void *b);
-int compare_teams_by_spectator_count(const void *a, const void *b);
+int compare_teams_by_spectator_sum(const void *a, const void *b);
 int compare_matches_by_total_goals(const void *a, const void *b);
 int compare_teams_by_points(const void *a, const void *b);
 
@@ -457,7 +456,7 @@ void initialize_team(Team *team, const char team_name[]) {
   strcpy(team->name, team_name);
   team->home_wins = 0;
   team->away_wins = 0;
-  team->lowest_home_spectators = INT_MAX;
+  team->home_spectator_sum = 0;
   team->won_matches = 0;
   team->tied_matches = 0;
   team->lost_matches = 0;
@@ -508,8 +507,7 @@ void update_match_stats_for_teams(Match *matches[], int match_count) {
     away_team->goals_against += match->home_goals;
 
     /* Update spectator stats */
-    if (match->spectator_count < home_team->lowest_home_spectators)
-      home_team->lowest_home_spectators = match->spectator_count;
+    home_team->home_spectator_sum += match->spectator_count;
   }
 }
 
@@ -623,9 +621,9 @@ void print_teams_with_more_away_wins(Team *teams[], int team_count) {
 
 void print_team_with_lowest_spectator_count_at_home(Team *teams[], int team_count) {
   if (team_count > 0) {
-    qsort(teams, team_count, sizeof(Team *), compare_teams_by_spectator_count);
+    qsort(teams, team_count, sizeof(Team *), compare_teams_by_spectator_sum);
     printf("\n\n4) The team with lowest spectator count in home games is %s with only %d spectators!\n",
-        teams[0]->name, teams[0]->lowest_home_spectators);
+        teams[0]->name, teams[0]->home_spectator_sum);
   }
 }
 
@@ -812,13 +810,13 @@ int compare_rounds_by_total_goals(const void *a, const void *b) {
 }
 
 /**
- * Compare two teams by lowest_home_spectators.
+ * Compare two teams by spectators in home matches.
  **/
-int compare_teams_by_spectator_count(const void *a, const void *b) {
+int compare_teams_by_spectator_sum(const void *a, const void *b) {
   Team *team1 = *((Team **)a);
   Team *team2 = *((Team **)b);
 
-  return team1->lowest_home_spectators - team2->lowest_home_spectators;
+  return team1->home_spectator_sum - team2->home_spectator_sum;
 }
 
 /** Compares two matches by goals scored. Highest goal count is first.
