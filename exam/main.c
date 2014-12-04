@@ -10,6 +10,7 @@
 #include <assert.h>
 #include <limits.h>
 
+/* Define limits. These values can be increased if needed */
 #define MAX_CHARS_PER_LINE 60
 #define MAX_MATCHES_PER_ROUND 6
 #define MAX_ROUNDS 33
@@ -19,7 +20,7 @@
  *
  * Line parsing logic is encapsulated in a separate function.
  * This structure makes it easy to return parsed values as a
- * single variable. Makes the code more clean.
+ * single variable.
  **/
 struct line_info {
   char weekday[4];
@@ -102,6 +103,98 @@ struct tournament {
   int round_count;
 };
 typedef struct tournament Tournament;
+
+/**
+ * The following functions are categorized into two major groups:
+ *  1) functions that deal with parsing the input file and building
+ *     a complete C-structure containing all the information in
+ *     the input file. Input processing starts in build_tournament()
+ *
+ *  2) functions that filters or sorts data and presents the
+ *     processed data to the user via the standard output.
+ **/
+
+/**  1) Input processing functions */
+/* 1.1) Build tournament related */
+Tournament *build_tournament(char file_name[]);
+Tournament *create_tournament(void);
+void initialize_tournament(Tournament *tournament);
+
+/* 1.2) Build rounds */
+void build_round_matches(Tournament *tournament, char match_lines[][MAX_CHARS_PER_LINE], int line_count);
+Round *create_round(Tournament *tournament);
+void initialize_round(Round *round, int round_number);
+
+/* 1.3) Parse lines */
+int is_end_marker_for_round(char *line);
+LineInfo *parse_line(const char line[]);
+int convert_to_int(const char input[]);
+
+/* 1.4) Build matches */
+Match *create_match(Tournament *tournament, int round, LineInfo *line_info);
+void initialize_match(Match *match, LineInfo *line_info);
+
+/* 1.4) Build teams */
+Team *find_or_create_team(Tournament *tournament, const char team_name[]);
+Team *find_team_by_name(Team *teams[], int team_count, const char team_name[]);
+Team *create_team(Team *teams[], int *team_count, const char team_name[]);
+void initialize_team(Team *team, const char team_name[]);
+
+/* 1.4) Post-processing */
+void update_tournament_stats(Tournament *tournament);
+void update_match_stats_for_teams(Match *matches[], int match_count);
+void compute_team_stats(Team *teams[], int team_count);
+
+/* 1.5) Releasing allocated memory */
+void free_memory(Tournament *tournament);
+
+/**  2) Output related functions */
+/* 2.1) Print functions */
+void print_all(Tournament *tournament);
+void print_interactive(Tournament *tournament);
+void print_matches_by_goals_scored(Match *matches[], int match_count, int goals);
+void print_round_with_highest_goal_score(Round *rounds[], int round_count);
+void print_teams_with_more_away_wins(Team *teams[], int team_count);
+void print_team_with_lowest_spectator_count_at_home(Team *teams[], int team_count);
+void print_matches_by_weekday(Match *matches[], int match_count,
+    const char *weekday, const char start_time[], const char end_time[]);
+void print_points_table(Team *teams[], int team_count);
+void print_match(const Match *match);
+
+/* 2.2) Helper functions used in print_interactive() */
+char get_valid_menu_item(void);
+void get_period_filter(char weekday[], char start_time[], char end_time[]);
+void clear_standard_input_line(void);
+void parse_time(const char formatted_time[], int *hours, int *minutes);
+int get_minutes_since_midnight(int hours, int minutes);
+int parse_time_as_minutes_since_midnight(const char formatted_time[]);
+
+/* 2.3) Compare functions used to sort data before writing to stdout */
+int compare_rounds_by_total_goals(const void *a, const void *b);
+int compare_teams_by_spectator_count(const void *a, const void *b);
+int compare_matches_by_total_goals(const void *a, const void *b);
+int compare_teams_by_points(const void *a, const void *b);
+
+int main(int argument_count, char *arguments[]){
+  Tournament *tournament;
+  int auto_run;
+
+  /* Parse input */
+  tournament = build_tournament("superliga-2013-2014");
+  auto_run = argument_count > 1 && strcmp(arguments[1], "--print") == 0;
+
+  /* Output processed data */
+  if (auto_run) {
+    print_all(tournament);
+  } else {
+    print_interactive(tournament);
+  }
+
+  free_memory(tournament);
+
+  return EXIT_SUCCESS;
+}
+
 
 /** Determines whether the given line marks the end of a round in the input file.
  **/
@@ -596,13 +689,13 @@ void initialize_tournament(Tournament *tournament) {
 
 /** Creates a new tournament.
  */
-Tournament *create_tournament() {
+Tournament *create_tournament(void) {
   Tournament *tournament = NULL;
 
   tournament = (Tournament *)malloc(sizeof(Tournament));
 
   if (tournament == NULL) {
-    printf("Error in create_tournament(): Could not allocate memory for a tournament!");
+    printf("Error in create_tournament(): Could not allocate memory!");
     exit(EXIT_FAILURE);
   }
 
@@ -679,7 +772,7 @@ void clear_standard_input_line(void){
   while ((ch = getchar()) != '\n' && ch != EOF);
 }
 
-char get_valid_menu_item() {
+char get_valid_menu_item(void) {
   int input = 0;
   do {
     printf("Please enter a number from 1 to 6 (0 to exit): ");
@@ -712,7 +805,7 @@ void get_period_filter(char weekday[], char start_time[], char end_time[]) {
   sprintf(end_time, "%02d.%02d", end_hour, end_min);
 }
 
-void run_interactive(Tournament *tournament) {
+void print_interactive(Tournament *tournament) {
   char menu_item;
   char weekday[4], start_time[6], end_time[6];
 
@@ -740,20 +833,4 @@ void run_interactive(Tournament *tournament) {
         break;
     }
   }
-}
-
-int main(int argument_count, char *arguments[]){
-  Tournament *tournament;
-
-  tournament = build_tournament("superliga-2013-2014");
-
-  if (argument_count > 1 && strcmp(arguments[1], "--print") == 0) {
-    print_all(tournament);
-  } else {
-    run_interactive(tournament);
-  }
-
-  free_memory(tournament);
-
-  return 0;
 }
