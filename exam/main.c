@@ -162,7 +162,8 @@ void print_points_table(Team *teams[], int team_count);
 void print_match(const Match *match);
 
 /* 2.2) Helper functions used in print_interactive() */
-char get_valid_menu_item(void);
+void print_menu(void);
+char get_valid_menu_selection(void);
 void get_period_filter(char weekday[], char start_time[], char end_time[]);
 void clear_standard_input_line(void);
 void parse_time(const char formatted_time[], int *hours, int *minutes);
@@ -538,9 +539,8 @@ void free_memory(Tournament *tournament) {
   free(tournament);
 }
 
-/**
- * Prints out all solutions with default input.
- */
+/** Prints out all solutions with default input.
+ **/
 void print_all(Tournament *tournament) {
   printf("Running program with --print argument.");
   print_matches_by_goals_scored(tournament->matches, tournament->match_count, 7);
@@ -552,12 +552,13 @@ void print_all(Tournament *tournament) {
 }
 
 void print_interactive(Tournament *tournament) {
-  char menu_item;
+  char menu_selection = 0;
   char weekday[4], start_time[6], end_time[6];
 
-  while (menu_item != '0') {
-    menu_item = get_valid_menu_item();
-    switch (menu_item) {
+  while (menu_selection != '0') {
+    print_menu();
+    menu_selection = get_valid_menu_selection();
+    switch (menu_selection) {
       case '1':
         print_matches_by_goals_scored(tournament->matches, tournament->match_count, 7);
         break;
@@ -623,7 +624,7 @@ void print_teams_with_more_away_wins(Team *teams[], int team_count) {
 void print_team_with_lowest_spectator_count_at_home(Team *teams[], int team_count) {
   if (team_count > 0) {
     qsort(teams, team_count, sizeof(Team *), compare_teams_by_spectator_count);
-    printf("\n\n4) The team with lowest spectator count at home is %s with only %d spectators!\n",
+    printf("\n\n4) The team with lowest spectator count in home games is %s with only %d spectators!\n",
         teams[0]->name, teams[0]->lowest_home_spectators);
   }
 }
@@ -703,10 +704,32 @@ void print_match(const Match *match) {
       );
 }
 
-char get_valid_menu_item(void) {
+void print_menu(void) {
+  /* Multiple line string idea from:
+   * http://stackoverflow.com/questions/797318/how-to-split-a-string-literal-
+   * across-multiple-lines-in-c-objective-c: */
+  printf("\n\
+==================================================================\n\
+ Program options: \n\
+==================================================================\n\
+ 1) Print matches where number of goals scored is 7 or more. \n\
+ 2) Print the round with the highest goal score. \n\
+ 3) Print teams with more away wins than home wins. \n\
+ 4) Print the team with the lowest spectator count in home games. \n\
+ 5) Find matches played on certain weekdays and time. \n\
+ 6) Print points table. \n\n\
+ 0) Exit program. \n\
+");
+}
+
+/** Get a valid menu selection from standard input
+ **/
+char get_valid_menu_selection(void) {
   int input = 0;
   do {
     printf("Please enter a number from 1 to 6 (0 to exit): ");
+
+    /* Get only the first char and ignore the rest */
     input = getchar();
     clear_standard_input_line();
   } while (input >= '6' && input <= '0');
@@ -728,9 +751,9 @@ void get_period_filter(char weekday[], char start_time[], char end_time[]) {
     if (scan_res == 5)
       valid_input = 1;
     /* FIXME: Do more input validation here if there is time. */
-  } while (!valid_input);
 
-  clear_standard_input_line();
+    clear_standard_input_line();
+  } while (!valid_input);
 
   sprintf(start_time, "%02d.%02d", start_hour, start_min);
   sprintf(end_time, "%02d.%02d", end_hour, end_min);
