@@ -149,18 +149,18 @@ int convert_to_int(const char input[]);
 Match *create_match(Tournament *tournament, int round, LineInfo *line_info);
 void initialize_match(Match *match, LineInfo *line_info);
 
-/* 1.4) Build teams */
+/* 1.5) Build teams */
 Team *find_or_create_team(Tournament *tournament, const char team_name[]);
 Team *find_team_by_name(Team *teams[], int team_count, const char team_name[]);
 Team *create_team(Team *teams[], int *team_count, const char team_name[]);
 void initialize_team(Team *team, const char team_name[]);
 
-/* 1.4) Post-process */
+/* 1.6) Post-process */
 void update_tournament_stats(Tournament *tournament);
 void update_match_stats_for_teams(Match *matches[], int match_count);
 void compute_team_stats(Team *teams[], int team_count);
 
-/* 1.5) Release allocated memory */
+/* 1.7) Release allocated memory */
 void free_memory(Tournament *tournament);
 
 /**  2) Output related functions */
@@ -171,17 +171,17 @@ void print_matches_by_goals_scored(Tournament *tournament, int goals);
 void print_round_with_highest_goal_score(Round *rounds[], int round_count);
 void print_teams_with_more_away_wins(Tournament *tournament);
 void print_team_with_lowest_spectator_count_at_home(Tournament *tournament);
-void print_matches_by_weekday(Match *matches[], int match_count,
+void print_matches_by_weekday(Tournament *tournament,
     const char *weekday, const char start_time[], const char end_time[]);
 void print_points_table(Team *teams[], int team_count);
 void print_match(const Match *match);
 
-/* 2.2) Filter functions */
+/* 2.2) Filter and sort functions */
 Round *find_round_with_highest_goal_count(Round *rounds[], int round_count);
 void filter_matches_by_goals(Tournament *tournament, int goals, MatchCollection *filtered_matches);
 void find_teams_with_more_away_than_home_wins(Tournament *tournament, TeamCollection *output);
 Team *find_team_with_lowest_spectator_count_in_home_games(Team *teams[], int team_count);
-void filter_matches_by_weekday_and_time(Tournament *tournament, MatchCollection *output,
+void filter_and_sort_matches_by_weekday_and_time(Tournament *tournament, MatchCollection *output,
     const char *weekday, const char start_time[], const char end_time[]);
 
 /* 2.3) Helper functions used in print_interactive() */
@@ -587,7 +587,7 @@ void print_all(Tournament *tournament) {
   print_round_with_highest_goal_score(tournament->rounds, tournament->round_count);
   print_teams_with_more_away_wins(tournament);
   print_team_with_lowest_spectator_count_at_home(tournament);
-  print_matches_by_weekday(tournament->matches, tournament->match_count, "Fre", "18.05", "19.05");
+  print_matches_by_weekday(tournament, "Fre", "18.05", "19.05");
   print_points_table(tournament->teams, tournament->team_count);
 }
 
@@ -613,7 +613,7 @@ void print_interactive(Tournament *tournament) {
         break;
       case '5':
         get_period_filter(weekday, start_time, end_time);
-        print_matches_by_weekday(tournament->matches, tournament->match_count, weekday, start_time, end_time);
+        print_matches_by_weekday(tournament, weekday, start_time, end_time);
         break;
       case '6':
         print_points_table(tournament->teams, tournament->team_count);
@@ -640,6 +640,7 @@ void print_matches_by_goals_scored(Tournament *tournament, int goals) {
  **/
 void print_round_with_highest_goal_score(Round *rounds[], int round_count) {
   Round *round = find_round_with_highest_goal_count(rounds, round_count);
+
   printf("\n\n2) Round %d has the highest goal score with %d goals\n",
       round->number, round->total_goals);
 }
@@ -672,30 +673,17 @@ void print_team_with_lowest_spectator_count_at_home(Tournament *tournament) {
 /** Prints a sorted list of matches that are played on a certain weekday
  *  and within a certain time period.
  */
-void print_matches_by_weekday(Match *matches[], int match_count, const char *weekday,
+void print_matches_by_weekday(Tournament *tournament, const char *weekday,
     const char start_time[], const char end_time[]) {
 
-  int i, filter_start_time, filter_end_time, match_time;
-  Match *match;
-
-  /* Setup time filters */
-  filter_start_time = parse_time_as_minutes_since_midnight(start_time);
-  filter_end_time = parse_time_as_minutes_since_midnight(end_time);
-
-  /* Sort the list of matches by total goals in descending order */
-  qsort(matches, match_count, sizeof(Match *), compare_matches_by_total_goals);
+  int i;
+  MatchCollection list;
+  filter_and_sort_matches_by_weekday_and_time(tournament, &list, weekday, start_time, end_time);
 
   printf("\n\n5) Matches played on %s from %s to %s:\n\n", weekday, start_time, end_time);
 
-  for (i = 0; i < match_count; i++) {
-    match = matches[i];
-
-    if (strcmp(match->weekday, weekday) == 0) {
-      match_time = get_minutes_since_midnight(match->hour, match->minute);
-      if (match_time >= filter_start_time && match_time <= filter_end_time)
-        print_match(match);
-    }
-  }
+  for (i = 0; i < list.count; i++)
+    print_match(list.matches[i]);
 }
 
 /** Prints points table for alle teams.
@@ -703,7 +691,8 @@ void print_matches_by_weekday(Match *matches[], int match_count, const char *wee
 void print_points_table(Team *teams[], int team_count) {
   int i;
 
-  /* Sort teams by points in descending order */
+  /* Sort teams by points in descending order
+   * FIXME: Move sorting into another function */
   qsort(teams, team_count, sizeof(Team *), compare_teams_by_points);
 
   /* Print out the score */
@@ -814,6 +803,30 @@ Team *find_team_with_lowest_spectator_count_in_home_games(Team *teams[], int tea
   return team;
 }
 
+void filter_and_sort_matches_by_weekday_and_time(Tournament *tournament, MatchCollection *output,
+    const char *weekday, const char start_time[], const char end_time[]) {
+  int i, filter_start_time, filter_end_time, match_time;
+  Match *match;
+
+  /* Setup time filters */
+  filter_start_time = parse_time_as_minutes_since_midnight(start_time);
+  filter_end_time = parse_time_as_minutes_since_midnight(end_time);
+
+  output->count = 0;
+  for (i = 0; i < tournament->match_count; i++) {
+    match = tournament->matches[i];
+    if (strcmp(match->weekday, weekday) == 0) {
+      match_time = get_minutes_since_midnight(match->hour, match->minute);
+      if (match_time >= filter_start_time && match_time <= filter_end_time) {
+        output->matches[output->count] = match;
+        output->count++;
+      }
+    }
+  }
+
+  /* Sort the list of matches by total goals in descending order */
+  qsort(output->matches, output->count, sizeof(Match *), compare_matches_by_total_goals);
+}
 
 /** Get a valid menu selection from standard input
  **/
