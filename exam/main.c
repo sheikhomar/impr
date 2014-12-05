@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <limits.h>
 
 /* Define limits. These values can be increased if needed */
 #define MAX_CHARS_PER_LINE 60
@@ -106,6 +107,18 @@ struct tournament {
 };
 typedef struct tournament Tournament;
 
+struct match_collection {
+  int count;
+  Match *matches[MAX_MATCHES_PER_ROUND * MAX_ROUNDS];
+};
+typedef struct match_collection MatchCollection;
+
+struct team_collection {
+  int count;
+  Team *teams[MAX_TEAMS];
+};
+typedef struct team_collection TeamCollection;
+
 /**
  * The following functions are categorized into two major groups:
  *  1) functions that deal with parsing the input file and building
@@ -154,16 +167,24 @@ void free_memory(Tournament *tournament);
 /* 2.1) Print functions */
 void print_all(Tournament *tournament);
 void print_interactive(Tournament *tournament);
-void print_matches_by_goals_scored(Match *matches[], int match_count, int goals);
+void print_matches_by_goals_scored(Tournament *tournament, int goals);
 void print_round_with_highest_goal_score(Round *rounds[], int round_count);
-void print_teams_with_more_away_wins(Team *teams[], int team_count);
-void print_team_with_lowest_spectator_count_at_home(Team *teams[], int team_count);
+void print_teams_with_more_away_wins(Tournament *tournament);
+void print_team_with_lowest_spectator_count_at_home(Tournament *tournament);
 void print_matches_by_weekday(Match *matches[], int match_count,
     const char *weekday, const char start_time[], const char end_time[]);
 void print_points_table(Team *teams[], int team_count);
 void print_match(const Match *match);
 
-/* 2.2) Helper functions used in print_interactive() */
+/* 2.2) Filter functions */
+Round *find_round_with_highest_goal_count(Round *rounds[], int round_count);
+void filter_matches_by_goals(Tournament *tournament, int goals, MatchCollection *filtered_matches);
+void find_teams_with_more_away_than_home_wins(Tournament *tournament, TeamCollection *output);
+Team *find_team_with_lowest_spectator_count_in_home_games(Team *teams[], int team_count);
+void filter_matches_by_weekday_and_time(Tournament *tournament, MatchCollection *output,
+    const char *weekday, const char start_time[], const char end_time[]);
+
+/* 2.3) Helper functions used in print_interactive() */
 void print_menu(void);
 char get_valid_menu_selection(void);
 void get_period_filter(char weekday[], char start_time[], char end_time[]);
@@ -172,7 +193,7 @@ void parse_time(const char formatted_time[], int *hours, int *minutes);
 int get_minutes_since_midnight(int hours, int minutes);
 int parse_time_as_minutes_since_midnight(const char formatted_time[]);
 
-/* 2.3) Compare functions used to sort data before writing to stdout */
+/* 2.4) Compare functions used to sort data before writing to stdout */
 int compare_rounds_by_total_goals(const void *a, const void *b);
 int compare_teams_by_spectator_sum(const void *a, const void *b);
 int compare_matches_by_total_goals(const void *a, const void *b);
@@ -197,6 +218,24 @@ int main(int argument_count, char *arguments[]){
   free_memory(tournament);
 
   return EXIT_SUCCESS;
+}
+
+
+void read_file(const char file_name[]) {
+  char line[MAX_CHARS_PER_LINE];
+  int line_count = 0;
+  FILE *handle = fopen(file_name, "r");
+
+  if (handle != NULL) {
+    while (fgets(line, MAX_CHARS_PER_LINE, handle) != NULL) {
+      line_count++;
+    }
+    fclose(handle);
+  } else {
+    printf("Error in read_file(): File '%s' cannot be opened.\n", file_name);
+    exit(EXIT_FAILURE);
+  }
+
 }
 
 /** Build a new tournament using data from file.
@@ -303,7 +342,7 @@ Round *create_round(Tournament *tournament) {
   tournament->rounds[tournament->round_count] = round;
   tournament->round_count++;
 
-  initialize_round(round, tournament->round_count + 1);
+  initialize_round(round, tournament->round_count);
 
   return round;
 }
@@ -544,10 +583,10 @@ void free_memory(Tournament *tournament) {
  **/
 void print_all(Tournament *tournament) {
   printf("Running program with --print argument.");
-  print_matches_by_goals_scored(tournament->matches, tournament->match_count, 7);
+  print_matches_by_goals_scored(tournament, 7);
   print_round_with_highest_goal_score(tournament->rounds, tournament->round_count);
-  print_teams_with_more_away_wins(tournament->teams, tournament->team_count);
-  print_team_with_lowest_spectator_count_at_home(tournament->teams, tournament->team_count);
+  print_teams_with_more_away_wins(tournament);
+  print_team_with_lowest_spectator_count_at_home(tournament);
   print_matches_by_weekday(tournament->matches, tournament->match_count, "Fre", "18.05", "19.05");
   print_points_table(tournament->teams, tournament->team_count);
 }
@@ -561,16 +600,16 @@ void print_interactive(Tournament *tournament) {
     menu_selection = get_valid_menu_selection();
     switch (menu_selection) {
       case '1':
-        print_matches_by_goals_scored(tournament->matches, tournament->match_count, 7);
+        print_matches_by_goals_scored(tournament, 7);
         break;
       case '2':
         print_round_with_highest_goal_score(tournament->rounds, tournament->round_count);
         break;
       case '3':
-        print_teams_with_more_away_wins(tournament->teams, tournament->team_count);
+        print_teams_with_more_away_wins(tournament);
         break;
       case '4':
-        print_team_with_lowest_spectator_count_at_home(tournament->teams, tournament->team_count);
+        print_team_with_lowest_spectator_count_at_home(tournament);
         break;
       case '5':
         get_period_filter(weekday, start_time, end_time);
@@ -583,51 +622,51 @@ void print_interactive(Tournament *tournament) {
   }
 }
 
+
 /** Prints a list of matches filtered by goals.
  **/
-void print_matches_by_goals_scored(Match *matches[], int match_count, int goals) {
+void print_matches_by_goals_scored(Tournament *tournament, int goals) {
   int i;
+  MatchCollection filtered_matches;
+
+  filter_matches_by_goals(tournament, goals, &filtered_matches);
 
   printf("\n\n1) Matches with %d or more goals:\n\n", goals);
-  for (i = 0; i < match_count; i++)
-    if (matches[i]->total_goals >= goals)
-      print_match(matches[i]);
+  for (i = 0; i < filtered_matches.count; i++)
+    print_match(filtered_matches.matches[i]);
 }
 
 /** Prints the round with the highest goal score.
  **/
 void print_round_with_highest_goal_score(Round *rounds[], int round_count) {
-  if (round_count > 0) {
-    /* Sort rounds by array in descending order */
-    qsort(rounds, round_count, sizeof(Round *), compare_rounds_by_total_goals);
-
-    printf("\n\n2) Round %d has the highest goal score with %d goals\n",
-        rounds[0]->number, rounds[0]->total_goals);
-  }
+  Round *round = find_round_with_highest_goal_count(rounds, round_count);
+  printf("\n\n2) Round %d has the highest goal score with %d goals\n",
+      round->number, round->total_goals);
 }
 
 /** Prints a list of teams that have more away wins than home wins.
  * */
-void print_teams_with_more_away_wins(Team *teams[], int team_count) {
+void print_teams_with_more_away_wins(Tournament *tournament) {
   int i;
+  TeamCollection filtered;
+
+  find_teams_with_more_away_than_home_wins(tournament, &filtered);
 
   printf("\n\n3) Teams with more aways wins than home wins:\n");
-  for (i = 0; i < team_count; i++) {
-    if (teams[i]->away_wins > teams[i]->home_wins) {
-      printf(" - %s has %d away wins and %d home wins \n",
-          teams[i]->name,
-          teams[i]->away_wins,
-          teams[i]->home_wins);
-    }
+  for (i = 0; i < filtered.count; i++) {
+    printf(" - %s has %d away wins and %d home wins \n",
+      filtered.teams[i]->name,
+      filtered.teams[i]->away_wins,
+      filtered.teams[i]->home_wins);
   }
 }
 
-void print_team_with_lowest_spectator_count_at_home(Team *teams[], int team_count) {
-  if (team_count > 0) {
-    qsort(teams, team_count, sizeof(Team *), compare_teams_by_spectator_sum);
-    printf("\n\n4) The team with lowest spectator count in home games is %s with only %d spectators!\n",
-        teams[0]->name, teams[0]->home_spectator_sum);
-  }
+void print_team_with_lowest_spectator_count_at_home(Tournament *tournament) {
+  Team *team = find_team_with_lowest_spectator_count_in_home_games(
+      tournament->teams, tournament->team_count);
+
+  printf("\n\n4) The team with lowest spectator count in home games is %s with only %d spectators!\n",
+      team->name, team->home_spectator_sum);
 }
 
 /** Prints a sorted list of matches that are played on a certain weekday
@@ -722,6 +761,59 @@ void print_menu(void) {
  0) Exit program. \n\
 ");
 }
+
+/** Finds the round with the highest goal score.
+ **/
+Round *find_round_with_highest_goal_count(Round *rounds[], int round_count) {
+  int i;
+  Round *round = NULL;
+
+  for (i = 0; i < round_count; i++)
+    if (round == NULL || rounds[i]->total_goals > round->total_goals)
+      round = rounds[i];
+
+  return round;
+}
+
+/** Filter matches by goals.
+ */
+void filter_matches_by_goals(Tournament *tournament, int goals, MatchCollection *filtered_matches) {
+  int i;
+  filtered_matches->count = 0;
+  for (i = 0; i < tournament->match_count; i++) {
+    if (tournament->matches[i]->total_goals >= goals) {
+      filtered_matches->matches[filtered_matches->count] = tournament->matches[i];
+      filtered_matches->count++;
+    }
+  }
+}
+
+void find_teams_with_more_away_than_home_wins(Tournament *tournament, TeamCollection *output) {
+  int i;
+
+  output->count = 0;
+  for (i = 0; i < tournament->team_count; i++) {
+    if (tournament->teams[i]->away_wins > tournament->teams[i]->home_wins) {
+      output->teams[output->count] = tournament->teams[i];
+      output->count++;
+    }
+  }
+}
+
+Team *find_team_with_lowest_spectator_count_in_home_games(Team *teams[], int team_count) {
+  int i, lowest_spectator_count = INT_MAX;
+  Team *team = NULL;
+
+  for (i = 0; i < team_count; i++) {
+    if (teams[i]->home_spectator_sum < lowest_spectator_count) {
+      lowest_spectator_count = teams[i]->home_spectator_sum;
+      team = teams[i];
+    }
+  }
+
+  return team;
+}
+
 
 /** Get a valid menu selection from standard input
  **/
